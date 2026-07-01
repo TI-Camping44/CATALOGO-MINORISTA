@@ -5,7 +5,6 @@ import json
 # =====================================
 # CONFIGURACIÓN DIRECTA (CAMPING 44)
 # =====================================
-# Volvemos a las credenciales fijas para evitar el error de XML-RPC
 URL = "https://camping44.odoo.com"
 DB = "gcaceres93-camping-main-15845610"
 USER = "facundocolman@camping44.com.py"
@@ -59,9 +58,10 @@ def main():
                 if tmpl_id not in mapa_precios: mapa_precios[tmpl_id] = {}
                 mapa_precios[tmpl_id][pl_id] = item.get('fixed_price', 0.0)
 
+        # Traemos la imagen_128 que es ultraliviana para no trancar la tablet
         print("Extrayendo productos de Odoo...")
         filtros = [['sale_ok', '=', True], ['active', '=', True], ['company_id', '=', 1]]
-        campos = ['id', 'name', 'default_code', 'qty_available', 'categ_id', 'product_brand_id', 'product_tmpl_id']
+        campos = ['id', 'name', 'default_code', 'qty_available', 'categ_id', 'product_brand_id', 'product_tmpl_id', 'image_128']
         products = models.execute_kw(DB, uid, API_KEY, 'product.product', 'search_read', [filtros], {'fields': campos, 'limit': 50000})
 
         print("Descontando productos perdidos (Ubicación NSE)...")
@@ -77,13 +77,6 @@ def main():
                 if q.get('product_id'):
                     pid = q['product_id'][0] if isinstance(q['product_id'], list) else q['product_id']
                     nse_stock[pid] = nse_stock.get(pid, 0.0) + float(q.get('quantity', 0.0))
-
-        stock_salon = {
-            "501048": 20000, "501113": 15000, "501121": 20000, "501333": 5000,
-            "501366": 20000, "501379": 20000, "501493": 13000, "501505": 20000,
-            "501527": 10000, "501567": 2000,  "501577": 20000, "501581": 20000,
-            "501591": 20000, "501593": 15000, "501604": 4000
-        }
 
         categorias_datos = {}
         orden_hojas = [
@@ -163,8 +156,10 @@ def main():
             categorias_datos[hoja].append(p)
             categorias_datos["Todo"].append(p)
 
-        print("Creando Base de Datos Liviana...")
+        print("Separando datos livianos de mapas de imágenes binarias...")
         productos_js = []
+        imagenes_js = {} # Mapa independiente para evitar bloqueos de seguridad de Odoo
+        
         for p in categorias_datos["Todo"]:
             base_price = 0.0
             for val in p['lista_precios_vals']:
@@ -180,9 +175,15 @@ def main():
                 "s": int(p['stock_calculado']),
                 "h": p['hoja_asignada'],
                 "pr": base_price,
-                "i": f"{URL}/web/image/product.product/{p['id']}/image_128", 
                 "p": {}
             }
+            
+            # Incrustamos la imagen directamente para sortear el candado de seguridad de Odoo
+            img_data = p.get('image_128')
+            if img_data:
+                if hasattr(img_data, 'data'): img_data = img_data.data
+                img_base64 = img_data.decode("utf-8") if isinstance(img_data, bytes) else img_data
+                imagenes_js[cod_limpio] = img_base64
                 
             for idx, precio in enumerate(p['lista_precios_vals']):
                 pl_name = pricelists[idx]["name_clean"]
@@ -196,6 +197,7 @@ def main():
             productos_js.append(prod_dict)
 
         json_str = json.dumps(productos_js)
+        json_images_str = json.dumps(imagenes_js)
         logo_html = f"data:image/png;base64,{logo_base64}" if logo_base64 else ""
 
         print("Generando index.html...")
@@ -301,6 +303,7 @@ def main():
         <script>
             let debounceTimer;
             const PRODUCTOS = ##JSON_DATA##;
+            const IMAGENES = ##JSON_IMAGES##;
             
             let stateCat = 'Todo'; let stateSearch = ''; let stateTarifa = 'Todas'; let stateSort = 'default';
             let modoSeguridadActivo = false;
@@ -364,7 +367,8 @@ def main():
                 
                 let html = '';
                 items.forEach(p => {
-                    let imgTag = p.i ? `<img src="${p.i}" class="producto-img" loading="lazy" onerror="this.onerror=null; this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'100\\' height=\\'100\\' viewBox=\\'0 0 100 100\\'><text y=\\'50%\\' x=\\'50%\\' fill=\\'%23aaa\\' text-anchor=\\'middle\\' alignment-baseline=\\'central\\' font-size=\\'12\\'>Sin foto</text></svg>';">` : `<div class="producto-img d-flex align-items-center justify-content-center text-muted border-bottom"><small style="font-size:0.7rem;">Sin foto</small></div>`;
+                    let b64 = IMAGENES[p.c];
+                    let imgTag = b64 ? `<img src="data:image/png;base64,${b64}" class="producto-img" loading="lazy">` : `<div class="producto-img d-flex align-items-center justify-content-center text-muted border-bottom"><small style="font-size:0.7rem;">Sin foto</small></div>`;
                     let stockClass = p.s <= 5 ? 'stock-rojo' : (p.s <= 20 ? 'stock-amarillo' : 'stock-verde');
                     
                     let preciosHtml = '';
@@ -470,7 +474,7 @@ def main():
                         if (mostrarStock) columnas.push("Stock");
                         tarifasSeleccionadas.forEach(t => columnas.push(t));
 
-                        let filas = []; let urlsImagenes = [];
+                        let filas = []; let imagenesFila = [];
                         productosFiltrados.forEach(p => {
                             let preciosFila = []; let tienePrecio = false;
                             tarifasSeleccionadas.forEach(t => { if (p.p[t]) { preciosFila.push(p.p[t]); tienePrecio = true; } else { preciosFila.push('-'); } });
@@ -479,30 +483,8 @@ def main():
                             if (mostrarStock) row.push(p.s.toString());
                             preciosFila.forEach(precio => row.push(precio));
                             filas.push(row); 
-                            urlsImagenes.push(p.i || "");
+                            imagenesFila.push(IMAGENES[p.c] || "");
                         });
-
-                        const fetchImageAsBase64 = (url) => {
-                            return new Promise((resolve) => {
-                                if(!url) return resolve(null);
-                                const img = new Image();
-                                img.crossOrigin = 'Anonymous';
-                                img.onload = function() {
-                                    try {
-                                        const canvas = document.createElement('canvas');
-                                        canvas.width = this.width;
-                                        canvas.height = this.height;
-                                        const ctx = canvas.getContext('2d');
-                                        ctx.drawImage(this, 0, 0);
-                                        resolve(canvas.toDataURL('image/jpeg'));
-                                    } catch(e) { resolve(null); }
-                                };
-                                img.onerror = () => resolve(null);
-                                img.src = url;
-                            });
-                        };
-
-                        let base64Imagenes = await Promise.all(urlsImagenes.map(url => fetchImageAsBase64(url)));
 
                         doc.autoTable({
                             head: [columnas], body: filas, startY: 35, rowPageBreak: 'avoid',
@@ -512,9 +494,9 @@ def main():
                             bodyStyles: { minCellHeight: 20 },
                             didDrawCell: function(data) {
                                 if (data.column.index === 0 && data.cell.section === 'body') {
-                                    let b64Str = base64Imagenes[data.row.index];
+                                    let b64Str = imagenesFila[data.row.index];
                                     if (b64Str) {
-                                        try { doc.addImage(b64Str, 'JPEG', data.cell.x + 2, data.cell.y + 2, 16, 16); } catch(e) {}
+                                        try { doc.addImage("data:image/png;base64," + b64Str, 'PNG', data.cell.x + 2, data.cell.y + 2, 16, 16); } catch(e) {}
                                     }
                                 }
                             }
@@ -532,11 +514,12 @@ def main():
 
         html = html.replace('##LOGO_HTML##', logo_html)
         html = html.replace('##JSON_DATA##', json_str)
+        html = html.replace('##JSON_IMAGES##', json_images_str)
 
         with open("index.html", "w", encoding="utf-8") as f:
             f.write(html)
             
-        print(f"¡Catálogo de Minoristas/Salón reparado con éxito!")
+        print(f"¡Catálogo de Minoristas/Salón con imágenes embebidas reparado con éxito!")
 
     except Exception as e:
         print(f"Error general: {e}")
