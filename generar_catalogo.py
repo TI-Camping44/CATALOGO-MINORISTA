@@ -3,12 +3,12 @@ import os
 import json
 
 # =====================================
-# CONFIGURACIÓN DIRECTA (CAMPING 44)
+# CONFIGURACIÓN INTELIGENTE (CAMPING 44)
 # =====================================
-URL = "https://camping44.odoo.com"
-DB = "gcaceres93-camping-main-15845610"
-USER = "facundocolman@camping44.com.py"
-API_KEY = "55f70e57a3caa3113e3ffa559b5ba020931dc501"
+URL = os.environ.get('ODOO_URL', "https://camping44.odoo.com")
+DB = os.environ.get('ODOO_DB', "gcaceres93-camping-main-15845610")
+USER = os.environ.get('ODOO_USER', "facundocolman@camping44.com.py")
+API_KEY = os.environ.get('ODOO_API_KEY', "55f70e57a3caa3113e3ffa559b5ba020931dc501")
 
 def main():
     try:
@@ -58,7 +58,6 @@ def main():
                 if tmpl_id not in mapa_precios: mapa_precios[tmpl_id] = {}
                 mapa_precios[tmpl_id][pl_id] = item.get('fixed_price', 0.0)
 
-        # Traemos la imagen_128 que es ultraliviana para no trancar la tablet
         print("Extrayendo productos de Odoo...")
         filtros = [['sale_ok', '=', True], ['active', '=', True], ['company_id', '=', 1]]
         campos = ['id', 'name', 'default_code', 'qty_available', 'categ_id', 'product_brand_id', 'product_tmpl_id', 'image_128']
@@ -158,7 +157,7 @@ def main():
 
         print("Separando datos livianos de mapas de imágenes binarias...")
         productos_js = []
-        imagenes_js = {} # Mapa independiente para evitar bloqueos de seguridad de Odoo
+        imagenes_js = {} 
         
         for p in categorias_datos["Todo"]:
             base_price = 0.0
@@ -178,7 +177,6 @@ def main():
                 "p": {}
             }
             
-            # Incrustamos la imagen directamente para sortear el candado de seguridad de Odoo
             img_data = p.get('image_128')
             if img_data:
                 if hasattr(img_data, 'data'): img_data = img_data.data
@@ -385,7 +383,7 @@ def main():
                             <div class='position-relative'>
                                 ${imgTag}
                                 <span class='position-absolute top-0 start-0 m-1 badge bg-dark font-monospace' style='font-size:0.7rem; padding:3px 6px;'>${p.c}</span>
-                                <span class='position-absolute bottom-0 end-0 m-1 badge ${stockClass} fw-bold' style='font-size:0.7rem; padding:3px 6px;'>St: ${p.s}</span>
+                                <span class='position-absolute bottom-0 end-0 m-1 badge ${stockClass} fw-bold' style='font-size:0.75rem; padding:4px 7px;'>Stock: ${p.s}</span>
                             </div>
                             <div class='card-body d-flex flex-column justify-content-between p-2 bg-white' style='flex-grow:1;'>
                                 <div class='mb-1'>
@@ -474,7 +472,7 @@ def main():
                         if (mostrarStock) columnas.push("Stock");
                         tarifasSeleccionadas.forEach(t => columnas.push(t));
 
-                        let filas = []; let imagenesFila = [];
+                        let filas = []; let urlsImagenes = [];
                         productosFiltrados.forEach(p => {
                             let preciosFila = []; let tienePrecio = false;
                             tarifasSeleccionadas.forEach(t => { if (p.p[t]) { preciosFila.push(p.p[t]); tienePrecio = true; } else { preciosFila.push('-'); } });
@@ -483,8 +481,30 @@ def main():
                             if (mostrarStock) row.push(p.s.toString());
                             preciosFila.forEach(precio => row.push(precio));
                             filas.push(row); 
-                            imagenesFila.push(IMAGENES[p.c] || "");
+                            urlsImagenes.push(p.i || "");
                         });
+
+                        const fetchImageAsBase64 = (url) => {
+                            return new Promise((resolve) => {
+                                if(!url) return resolve(null);
+                                const img = new Image();
+                                img.crossOrigin = 'Anonymous';
+                                img.onload = function() {
+                                    try {
+                                        const canvas = document.createElement('canvas');
+                                        canvas.width = this.width;
+                                        canvas.height = this.height;
+                                        const ctx = canvas.getContext('2d');
+                                        ctx.drawImage(this, 0, 0);
+                                        resolve(canvas.toDataURL('image/jpeg'));
+                                    } catch(e) { resolve(null); }
+                                };
+                                img.onerror = () => resolve(null);
+                                img.src = url;
+                            });
+                        };
+
+                        let base64Imagenes = await Promise.all(urlsImagenes.map(url => fetchImageAsBase64(url)));
 
                         doc.autoTable({
                             head: [columnas], body: filas, startY: 35, rowPageBreak: 'avoid',
@@ -494,9 +514,9 @@ def main():
                             bodyStyles: { minCellHeight: 20 },
                             didDrawCell: function(data) {
                                 if (data.column.index === 0 && data.cell.section === 'body') {
-                                    let b64Str = imagenesFila[data.row.index];
+                                    let b64Str = base64Imagenes[data.row.index];
                                     if (b64Str) {
-                                        try { doc.addImage("data:image/png;base64," + b64Str, 'PNG', data.cell.x + 2, data.cell.y + 2, 16, 16); } catch(e) {}
+                                        try { doc.addImage(b64Str, 'JPEG', data.cell.x + 2, data.cell.y + 2, 16, 16); } catch(e) {}
                                     }
                                 }
                             }
