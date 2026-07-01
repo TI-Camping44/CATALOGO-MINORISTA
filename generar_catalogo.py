@@ -60,7 +60,7 @@ def main():
 
         print("Extrayendo productos de Odoo...")
         filtros = [['sale_ok', '=', True], ['active', '=', True], ['company_id', '=', 1]]
-        campos = ['id', 'name', 'default_code', 'qty_available', 'categ_id', 'product_brand_id', 'product_tmpl_id']
+        campos = ['id', 'name', 'default_code', 'qty_available', 'categ_id', 'product_brand_id', 'product_tmpl_id', 'image_256']
         products = models.execute_kw(DB, uid, API_KEY, 'product.product', 'search_read', [filtros], {'fields': campos, 'limit': 50000})
 
         print("Descontando productos perdidos (Ubicación NSE)...")
@@ -164,7 +164,7 @@ def main():
 
         print("Creando Base de Datos Liviana...")
         productos_js = []
-        for p in pandas_clone = products:
+        for p in categorias_datos["Todo"]:
             base_price = 0.0
             for val in p['lista_precios_vals']:
                 if float(val or 0.0) > 0:
@@ -409,13 +409,12 @@ def main():
                     if (query !== '') { 
                         stateCat = 'Todo'; 
                         document.querySelectorAll('.btn-filtro').forEach(b => b.classList.remove('active')); 
-                        document.querySelectorAll(`.btn-filtro[data-filtro="Todo"]`).forEach(b => b.add('active')); 
+                        document.querySelectorAll(`.btn-filtro[data-filtro="Todo"]`).forEach(b => b.classList.add('active')); 
                     }
                     aplicarFiltros();
                 }, 250);
             });
 
-            // CORRECCIÓN HISTÓRICA: Se usa classList.add en lugar del método inexistente .add()
             document.addEventListener('click', function(e) {
                 let filtroBtn = e.target.closest('.btn-filtro');
                 if(filtroBtn) {
