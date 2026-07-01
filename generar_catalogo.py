@@ -3,12 +3,13 @@ import os
 import json
 
 # =====================================
-# CONFIGURACIÓN INTELIGENTE (CAMPING 44)
+# CONFIGURACIÓN DIRECTA (CAMPING 44)
 # =====================================
-URL = os.environ.get('ODOO_URL', "https://camping44.odoo.com")
-DB = os.environ.get('ODOO_DB', "gcaceres93-camping-main-15845610")
-USER = os.environ.get('ODOO_USER', "facundocolman@camping44.com.py")
-API_KEY = os.environ.get('ODOO_API_KEY', "55f70e57a3caa3113e3ffa559b5ba020931dc501")
+# Volvemos a las credenciales fijas para evitar el error de XML-RPC
+URL = "https://camping44.odoo.com"
+DB = "gcaceres93-camping-main-15845610"
+USER = "facundocolman@camping44.com.py"
+API_KEY = "55f70e57a3caa3113e3ffa559b5ba020931dc501"
 
 def main():
     try:
@@ -60,7 +61,7 @@ def main():
 
         print("Extrayendo productos de Odoo...")
         filtros = [['sale_ok', '=', True], ['active', '=', True], ['company_id', '=', 1]]
-        campos = ['id', 'name', 'default_code', 'qty_available', 'categ_id', 'product_brand_id', 'product_tmpl_id', 'image_256']
+        campos = ['id', 'name', 'default_code', 'qty_available', 'categ_id', 'product_brand_id', 'product_tmpl_id']
         products = models.execute_kw(DB, uid, API_KEY, 'product.product', 'search_read', [filtros], {'fields': campos, 'limit': 50000})
 
         print("Descontando productos perdidos (Ubicación NSE)...")
