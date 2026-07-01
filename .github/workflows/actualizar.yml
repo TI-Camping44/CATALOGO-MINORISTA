@@ -5,22 +5,11 @@ on:
     - cron: '*/30 * * * *' # Se ejecuta de forma automática cada 30 minutos
   workflow_dispatch: # Activa el botón manual
 
-# Permisos necesarios para escribir el historial y publicar la web en vivo
-permissions:
-  contents: write
-  pages: write
-  id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
-
 jobs:
   build_and_deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Descargar el repositorio
@@ -32,30 +21,12 @@ jobs:
           python-version: '3.10'
 
       - name: Ejecutar Script de Odoo
-        env:
-          ODOO_URL: ${{ secrets.ODOO_URL }}
-          ODOO_DB: ${{ secrets.ODOO_DB }}
-          ODOO_USER: ${{ secrets.ODOO_USER }}
-          ODOO_API_KEY: ${{ secrets.ODOO_API_KEY }}
         run: python generar_catalogo.py
 
-      - name: Guardar index.html en el repositorio (Historial)
+      - name: Guardar y subir index.html al repositorio
         run: |
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
           git add index.html
           git diff --quiet && git diff --staged --quiet || git commit -m "Actualización automática de precios desde Odoo"
-          git push origin main || echo "No se pudo hacer push, continuando con el despliegue..."
-
-      # PASOS MAESTROS: Publican la web inmediatamente en este mismo proceso
-      - name: Configurar GitHub Pages
-        uses: actions/configure-pages@v4
-
-      - name: Subir artefacto de la web
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: '.' # Sube la carpeta raíz donde está tu index.html
-
-      - name: Desplegar en GitHub Pages en Vivo
-        id: deployment
-        uses: actions/deploy-pages@v4
+          git push origin main
