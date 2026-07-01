@@ -3,12 +3,13 @@ import os
 import json
 
 # =====================================
-# CONFIGURACIÓN DIRECTA (CAMPING 44)
+# CONFIGURACIÓN INTELIGENTE (CAMPING 44)
 # =====================================
-URL = "https://camping44.odoo.com"
-DB = "gcaceres93-camping-main-15845610"
-USER = "facundocolman@camping44.com.py"
-API_KEY = "55f70e57a3caa3113e3ffa559b5ba020931dc501"
+# Si corre en GitHub Actions toma los Secrets, si corre local usa los textos fijos
+URL = os.environ.get('ODOO_URL', "https://camping44.odoo.com")
+DB = os.environ.get('ODOO_DB', "gcaceres93-camping-main-15845610")
+USER = os.environ.get('ODOO_USER', "facundocolman@camping44.com.py")
+API_KEY = os.environ.get('ODOO_API_KEY', "55f70e57a3caa3113e3ffa559b5ba020931dc501")
 
 def main():
     try:
@@ -157,7 +158,7 @@ def main():
 
         print("Separando datos livianos de mapas de imágenes binarias...")
         productos_js = []
-        imagenes_js = {} # Mapa independiente para evitar saturar el hilo de JS
+        imagenes_js = {}
         
         for p in categorias_datos["Todo"]:
             base_price = 0.0
@@ -198,7 +199,7 @@ def main():
         json_images_str = json.dumps(imagenes_js)
         logo_html = f"data:image/png;base64,{logo_base64}" if logo_base64 else ""
 
-        print("Construyendo UI responsiva de alto rendimiento...")
+        print("Generando index.html...")
         
         html = """<!DOCTYPE html><html lang='es'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>Catálogo Salón - Camping 44</title>
         <link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css' rel='stylesheet'>
@@ -210,24 +211,20 @@ def main():
             .stock-rojo{background-color:#FEE2E2!important;color:#991B1B;}
             .stock-amarillo{background-color:#FEF3C7!important;color:#92400E;}
             .stock-verde{background-color:#D1FAE5!important;color:#065F46;}
-            /* Sidebar PC */
             .desktop-sidebar{position:sticky;top:0;height:100vh;overflow-y:auto;background:#fff;border-right:1px solid #e5e7eb;padding:25px 15px;box-shadow:2px 0 10px rgba(0,0,0,0.03);}
             .btn-filtro{color:#081226;font-size:0.9rem;padding:9px 14px;font-weight:600;border-radius:30px;border:1px solid #dee2e6;text-align:left;width:100%;cursor:pointer;background:#fff;transition:0.2s;margin-bottom:5px;}
             .btn-filtro.active{background-color:#081226;color:white;border-color:#081226;}
             .btn-tarifa{color:#166534;font-size:0.9rem;padding:8px 12px;font-weight:600;border-radius:30px;border:1px solid #bbf7d0;text-align:left;width:100%;cursor:pointer;background:#f0fdf4;transition:0.2s;margin-bottom:5px;}
             .btn-tarifa.active{background-color:#166534;color:white;border-color:#166534;}
-            /* Panel PDF Superior */
             .pdf-panel{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:15px;display:flex;flex-wrap:wrap;gap:15px;align-items:center;justify-content:space-between;}
             .pdf-panel-title{font-size:0.85rem;font-weight:800;color:#dc3545;margin:0;}
             .check-group{display:flex;flex-wrap:wrap;gap:12px;align-items:center;}
-            /* Tarjeta Optimizada Movil */
             .tarjeta-contenedor{contain: content;}
             .producto-img{width:100%;height:150px;object-fit:contain;background:white;padding:8px;}
             @media(min-width:768px){.producto-img{height:190px;}}
             .card-producto{border-radius:14px;overflow:hidden;background:#fff;border:1px solid #e5e7eb;height:100%;transition:transform 0.15s;}
             .price-box{background:#f9fafb;border-radius:8px;padding:5px;font-size:0.78rem;text-align:center;border:1px solid #e5e7eb;height:100%;display:flex;flex-direction:column;justify-content:center;}
             .zona-seguridad{display:none;}
-            /* Navbar Móvil Fija */
             .mobile-header{background:#fff;border-bottom:1px solid #e5e7eb;position:sticky;top:0;z-index:1020;padding:10px 15px;}
             .btn-floating-menu{position:fixed;bottom:20px;right:20px;z-index:1030;background:#081226;color:#fff;border:none;padding:12px 24px;border-radius:30px;font-weight:bold;box-shadow:0 4px 15px rgba(0,0,0,0.2);}
             @media print{#web-app{display:none!important;}#print-placeholder{display:block!important;width:100%;}.print-table{width:100%!important;border-collapse:collapse!important;margin-top:20px;}.print-table th{background-color:#081226!important;color:white!important;padding:8px;font-size:11px;text-align:center;}.print-table td{padding:6px;border:1px solid #ddd;font-size:11px;vertical-align:middle;}}
@@ -247,8 +244,7 @@ def main():
                 <h5 class="offcanvas-title fw-bold">Filtros de Catálogo</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
             </div>
-            <div class="offcanvas-body bg-light" id="contenedorFiltrosMovil">
-                </div>
+            <div class="offcanvas-body bg-light" id="contenedorFiltrosMovil"></div>
         </div>
 
         <div class='container-fluid'><div class='row'>
@@ -275,7 +271,7 @@ def main():
         
         first_tab = True
         for hoja in orden_hojas:
-            pandas_clone = categorias_datos[hoja]
+            pandas_clone = categories_clone = categorias_datos[hoja]
             if not pandas_clone and hoja != "Todo": continue
             active_class = "active" if first_tab else ""
             html += f"<li class='nav-item'><button class='btn-filtro {active_class}' data-filtro='{hoja}'>📦 {hoja} ({len(pandas_clone)})</button></li>"
@@ -308,13 +304,12 @@ def main():
         <script>
             let debounceTimer;
             const PRODUCTOS = ##JSON_DATA##;
-            const IMAGENES = ##JSON_IMAGES##; // Mapa binario desacoplado para velocidad absoluta
+            const IMAGENES = ##JSON_IMAGES##; 
             
             let stateCat = 'Todo'; let stateSearch = ''; let stateTarifa = 'Todas'; let stateSort = 'default';
             let modoSeguridadActivo = false;
             let productosFiltrados = []; let paginaActual = 0; const ITEMS_POR_PAGINA = 30;
 
-            // Clonamos los controles de filtros para que funcionen sincronizados en PC y en el Offcanvas móvil
             document.getElementById('contenedorFiltrosMovil').innerHTML = document.getElementById('seccionFiltrosMaster').innerHTML;
 
             function toggleModoSeguridad() {
@@ -341,7 +336,6 @@ def main():
             function aplicarFiltros() {
                 let q = stateSearch.toUpperCase().trim();
                 
-                // El filtrado es instantáneo porque los objetos ya no cargan los pesados Base64 internamente
                 productosFiltrados = PRODUCTOS.filter(p => {
                     let matchCat = (stateCat === 'Todo' || p.h === stateCat);
                     let matchSearch = (q === '' || p.n.toUpperCase().includes(q) || p.c.toUpperCase().includes(q));
@@ -374,7 +368,6 @@ def main():
                 
                 let html = '';
                 items.forEach(p => {
-                    // Extrae la imagen del mapa binario indexado solo cuando se va a dibujar en pantalla
                     let b64 = IMAGENES[p.c];
                     let imgTag = b64 ? `<img src="data:image/png;base64,${b64}" class="producto-img" loading="lazy">` : `<div class="producto-img d-flex align-items-center justify-content-center text-muted border-bottom"><small style="font-size:0.7rem;">Sin foto</small></div>`;
                     let stockClass = p.s <= 5 ? 'stock-rojo' : (p.s <= 20 ? 'stock-amarillo' : 'stock-verde');
@@ -428,7 +421,6 @@ def main():
                 }, 250);
             });
 
-            // Sincronización bidireccional de los botones en PC y el menú lateral móvil
             document.addEventListener('click', function(e) {
                 let filtroBtn = e.target.closest('.btn-filtro');
                 if(filtroBtn) {
@@ -440,7 +432,6 @@ def main():
                     if(buscador.value !== '') { buscador.value = ''; stateSearch = ''; }
                     aplicarFiltros();
                     
-                    // Cierra el panel deslizable en móviles al elegir categoría
                     let canvasEl = document.getElementById('sidebarOffcanvas');
                     let instance = bootstrap.Offcanvas.getInstance(canvasEl);
                     if(instance) instance.hide();
@@ -463,7 +454,7 @@ def main():
                 if (tarifasSeleccionadas.length === 0) { alert('Por favor, tildá al menos 1 Tarifa.'); return; }
                 
                 let btnPdf = document.getElementById('btnGenerarPDF'); let originalText = btnPdf.innerHTML;
-                btnPdf.innerHTML = '⏳ Procesando...'; btnPdf.disabled = true;
+                btnPdf.innerHTML = '⏳ Procesando Archivo...'; btnPdf.disabled = true;
 
                 setTimeout(() => {
                     try {
@@ -519,17 +510,18 @@ def main():
                 }, 100);
             }
 
-            // INICIO EN CALIENTE
             aplicarFiltros();
         </script></body></html>"""
 
-        html += footer_html.replace('##LOGO_HTML##', logo_html)
+        # PROCESAMIENTO COMPLETO DE REEMPLAZOS (SIN OLVIDOS)
+        html = html.replace('##LOGO_HTML##', logo_html)
         html = html.replace('##JSON_DATA##', json_str)
+        html = html.replace('##JSON_IMAGES##', json_images_str) # LÍNEA MAESTRA AGREGADA
 
         with open("index.html", "w", encoding="utf-8") as f:
             f.write(html)
             
-        print(f"¡Catálogo de Minoristas/Salón optimizado con éxito!")
+        print(f"¡Catálogo de Minoristas/Salón corregido de forma impecable!")
 
     except Exception as e:
         print(f"Error general: {e}")
