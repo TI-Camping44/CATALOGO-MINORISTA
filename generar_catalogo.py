@@ -58,7 +58,7 @@ def main():
                 if tmpl_id not in mapa_precios: mapa_precios[tmpl_id] = {}
                 mapa_precios[tmpl_id][pl_id] = item.get('fixed_price', 0.0)
 
-        print("Extrayendo productos de Odoo (Optimizado sin Base64)...")
+        print("Extrayendo productos de Odoo...")
         filtros = [['sale_ok', '=', True], ['active', '=', True], ['company_id', '=', 1]]
         campos = ['id', 'name', 'default_code', 'qty_available', 'categ_id', 'product_brand_id', 'product_tmpl_id']
         products = models.execute_kw(DB, uid, API_KEY, 'product.product', 'search_read', [filtros], {'fields': campos, 'limit': 50000})
@@ -94,7 +94,7 @@ def main():
         ]
         for hoja in orden_hojas: categorias_datos[hoja] = []
 
-        print("Procesando catálogo...")
+        print("Filtrando catálogo minorista...")
         for p in products:
             ref = (p.get('default_code') or "").upper().strip()
             if ref.startswith("AVE") or ref.startswith("NSE") or ref.startswith("INT"): continue
@@ -162,9 +162,9 @@ def main():
             categorias_datos[hoja].append(p)
             categorias_datos["Todo"].append(p)
 
-        print("Creando Base de Datos Liviana con enlaces directos de imagen...")
+        print("Creando Base de Datos Liviana...")
         productos_js = []
-        for p in categorias_datos["Todo"]:
+        for p in pandas_clone = products:
             base_price = 0.0
             for val in p['lista_precios_vals']:
                 if float(val or 0.0) > 0:
@@ -179,7 +179,6 @@ def main():
                 "s": int(p['stock_calculado']),
                 "h": p['hoja_asignada'],
                 "pr": base_price,
-                # Enlace dinámico ligero a Odoo en vez de meter texto binario Base64 pesado
                 "i": f"{URL}/web/image/product.product/{p['id']}/image_128", 
                 "p": {}
             }
@@ -198,7 +197,7 @@ def main():
         json_str = json.dumps(productos_js)
         logo_html = f"data:image/png;base64,{logo_base64}" if logo_base64 else ""
 
-        print("Armando estructura HTML...")
+        print("Generando index.html...")
         
         html = """<!DOCTYPE html><html lang='es'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>Catálogo Salón - Camping 44</title>
         <link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css' rel='stylesheet'>
@@ -230,7 +229,7 @@ def main():
         </style></head><body><div id="web-app">
         
         <div class="mobile-header d-flex justify-content-between align-items-center d-lg-none shadow-sm">
-            <img src="##LOGO_HTML##" alt="Logo" style="height:45px; object-fit:contain; max-width:160px;">
+            <img src="##LOGO_HTML##" alt="Logo" style="height:55px; object-fit:contain; max-width:180px;">
             <button class="btn btn-sm btn-danger fw-bold rounded-pill px-3" onclick="toggleModoSeguridad()" id="btnToggleSeguridadMob">🔓 Seguridad</button>
         </div>
 
@@ -247,7 +246,7 @@ def main():
         <div class='container-fluid'><div class='row'>
         
         <div class='col-lg-2 d-none d-lg-block desktop-sidebar' id="sidebarDesktop">
-            <div class='text-center mb-3'><img src='##LOGO_HTML##' alt='Logo' style='height:48px;max-width:100%;object-fit:contain;'><h5 class='fw-bold mt-2 text-dark' style="font-size:1.05rem;">Catálogo de Salón</h5></div>
+            <div class='text-center mb-3'><img src='##LOGO_HTML##' alt='Logo' style='height:75px;max-width:100%;object-fit:contain;'><h5 class='fw-bold mt-2 text-dark' style="font-size:1.05rem;">Catálogo de Salón</h5></div>
             <button id="btnToggleSeguridad" class="btn btn-outline-danger btn-sm w-100 fw-bold rounded-pill mb-3" onclick="toggleModoSeguridad()">🔓 Modo Clientes Seguridad</button>
             <div id="seccionFiltrosMaster">
                 <h6 class='fw-bold mb-2 text-success px-1' style='font-size:0.8rem;'>1. TARIFA EN PANTALLA</h6>
@@ -416,12 +415,13 @@ def main():
                 }, 250);
             });
 
+            // CORRECCIÓN HISTÓRICA: Se usa classList.add en lugar del método inexistente .add()
             document.addEventListener('click', function(e) {
                 let filtroBtn = e.target.closest('.btn-filtro');
                 if(filtroBtn) {
                     let val = filtroBtn.getAttribute('data-filtro');
                     document.querySelectorAll('.btn-filtro').forEach(b => b.classList.remove('active'));
-                    document.querySelectorAll(`.btn-filtro[data-filtro="${val}"]`).forEach(b => b.add('active'));
+                    document.querySelectorAll(`.btn-filtro[data-filtro="${val}"]`).forEach(b => b.classList.add('active'));
                     stateCat = val;
                     let buscador = document.getElementById('buscadorWeb');
                     if(buscador.value !== '') { buscador.value = ''; stateSearch = ''; }
@@ -437,7 +437,7 @@ def main():
                 if(tarifaBtn) {
                     let val = tarifaBtn.getAttribute('data-tarifa');
                     document.querySelectorAll('.btn-tarifa').forEach(b => b.classList.remove('active'));
-                    document.querySelectorAll(`.btn-tarifa[data-tarifa="${val}"]`).forEach(b => b.add('active'));
+                    document.querySelectorAll(`.btn-tarifa[data-tarifa="${val}"]`).forEach(b => b.classList.add('active'));
                     stateTarifa = val;
                     aplicarFiltros();
                 }
@@ -536,7 +536,7 @@ def main():
         with open("index.html", "w", encoding="utf-8") as f:
             f.write(html)
             
-        print(f"¡Catálogo de Minoristas/Salón optimizado al 100%!")
+        print(f"¡Catálogo de Minoristas/Salón reparado con éxito!")
 
     except Exception as e:
         print(f"Error general: {e}")
