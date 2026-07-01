@@ -155,8 +155,10 @@ def main():
             categorias_datos[hoja].append(p)
             categorias_datos["Todo"].append(p)
 
-        print("Escribiendo base de datos JSON de Salón...")
+        print("Separando datos livianos de mapas de imágenes binarias...")
         productos_js = []
+        imagenes_js = {} # Mapa independiente para evitar saturar el hilo de JS
+        
         for p in categorias_datos["Todo"]:
             base_price = 0.0
             for val in p['lista_precios_vals']:
@@ -164,8 +166,9 @@ def main():
                     base_price = float(val)
                     break
 
+            cod_limpio = p.get('default_code', '-').strip()
             prod_dict = {
-                "c": p.get('default_code', '-').strip(),
+                "c": cod_limpio,
                 "n": p.get('name', ''),
                 "m": p['marca_limpia'],
                 "s": int(p['stock_calculado']),
@@ -178,9 +181,7 @@ def main():
             if img_data:
                 if hasattr(img_data, 'data'): img_data = img_data.data
                 img_base64 = img_data.decode("utf-8") if isinstance(img_data, bytes) else img_data
-                prod_dict["i"] = "data:image/png;base64," + img_base64
-            else:
-                prod_dict["i"] = ""
+                imagenes_js[cod_limpio] = img_base64
                 
             for idx, precio in enumerate(p['lista_precios_vals']):
                 pl_name = pricelists[idx]["name_clean"]
@@ -194,24 +195,81 @@ def main():
             productos_js.append(prod_dict)
 
         json_str = json.dumps(productos_js)
+        json_images_str = json.dumps(imagenes_js)
         logo_html = f"data:image/png;base64,{logo_base64}" if logo_base64 else ""
 
-        print("Generando index.html...")
+        print("Construyendo UI responsiva de alto rendimiento...")
         
         html = """<!DOCTYPE html><html lang='es'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>Catálogo Salón - Camping 44</title>
         <link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css' rel='stylesheet'>
         <script src='https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js'></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
-        <style>body{background-color:#f4f6f9;font-family:'Segoe UI',sans-serif;padding-bottom:30px;}.stock-rojo{background-color:#FEE2E2!important;color:#991B1B;}.stock-amarillo{background-color:#FEF3C7!important;color:#92400E;}.stock-verde{background-color:#D1FAE5!important;color:#065F46;}.desktop-sidebar{position:sticky;top:0;height:100vh;overflow-y:auto;background:#fff;border-right:1px solid #e5e7eb;padding:20px 15px;box-shadow:2px 0 10px rgba(0,0,0,0.03);}.btn-filtro{color:#081226;font-size:0.9rem;padding:7px 10px;font-weight:600;border-radius:30px;border:1px solid #dee2e6;text-align:left;width:100%;cursor:pointer;background:#fff;transition:0.2s;margin-bottom:4px;}.btn-filtro.active{background-color:#081226;color:white;border-color:#081226;}.btn-tarifa{color:#166534;font-size:0.9rem;padding:7px 10px;font-weight:600;border-radius:30px;border:1px solid #bbf7d0;text-align:left;width:100%;cursor:pointer;background:#f0fdf4;transition:0.2s;margin-bottom:4px;}.btn-tarifa.active{background-color:#166534;color:white;border-color:#166534;}.pdf-panel{background:#fff;border:2px solid #fecaca;border-radius:12px;padding:12px 18px;display:flex;flex-wrap:wrap;gap:15px;align-items:center;justify-content:space-between;}.pdf-panel-title{font-size:0.85rem;font-weight:800;color:#dc3545;margin:0;}.check-group{display:flex;flex-wrap:wrap;gap:12px;align-items:center;}.producto-img{width:100%;height:200px;object-fit:contain;background:white;padding:10px;}.card-producto{border-radius:12px;overflow:hidden;transition:transform 0.15s,box-shadow 0.15s;background:#fff;border:1px solid #e5e7eb;height:100%;}.card-producto:hover{transform:translateY(-3px);box-shadow:0 10px 20px rgba(0,0,0,0.08)!important;}.price-box{background:#f9fafb;border-radius:8px;padding:6px 4px;font-size:0.82rem;text-align:center;border:1px solid #e5e7eb;height:100%;display:flex;flex-direction:column;justify-content:center;} .zona-seguridad{display:none;} @media print{#web-app{display:none!important;}#print-placeholder{display:block!important;width:100%;}.print-table{width:100%!important;border-collapse:collapse!important;margin-top:20px;}.print-table th{background-color:#081226!important;color:white!important;padding:8px;border:1px solid #ddd;font-size:11px;text-transform:uppercase;text-align:center;}.print-table td{padding:6px;border:1px solid #ddd;font-size:11px;vertical-align:middle;}.print-img-pdf{width:60px!important;height:60px!important;object-fit:contain;}}</style></head><body><div id="web-app"><div class='container-fluid'><div class='row'><div class='col-lg-2 d-none d-lg-block desktop-sidebar'><div class='text-center mb-4'><img src='##LOGO_HTML##' alt='Logo' style='height:45px;max-width:100%;object-fit:contain;'><h6 class='fw-bold mt-2 text-dark'>Catálogo de Salón</h6></div>
-        <button id="btnToggleSeguridad" class="btn btn-outline-danger btn-sm w-100 fw-bold rounded-pill mb-3" onclick="toggleModoSeguridad()">🔓 Modo Clientes Seguridad</button>
-        <h6 class='fw-bold mb-2 text-success px-1' style='font-size:0.8rem;'>1. TARIFA EN PANTALLA</h6><ul class='nav flex-column gap-1 mb-3'><li class='nav-item'><button class='btn-tarifa active' data-tarifa='Todas'>👁️ Mostrar Todas</button></li><li class='nav-item'><button class='btn-tarifa' data-tarifa='SALGS'>💲 Tarifa SALGS (Salón)</button></li>
-        <li class='nav-item zona-seguridad'><button class='btn-tarifa' data-tarifa='MAYGS'>🛡️ Tarifa MAYGS</button></li>
-        <li class='nav-item zona-seguridad'><button class='btn-tarifa' data-tarifa='DIST 1'>🛡️ Tarifa DIST 1</button></li>
-        <li class='nav-item zona-seguridad'><button class='btn-tarifa' data-tarifa='DIST 2'>🛡️ Tarifa DIST 2</button></li>
-        <li class='nav-item zona-seguridad'><button class='btn-tarifa' data-tarifa='CREGS'>🛡️ Tarifa CREGS</button></li>
-        <li class='nav-item zona-seguridad'><button class='btn-tarifa' data-tarifa='CONGS'>🛡️ Tarifa CONGS</button></li>
-        </ul><hr><h6 class='fw-bold mb-2 text-dark px-1' style='font-size:0.8rem;'>2. FILTRAR CATEGORÍA</h6><ul class='nav flex-column gap-1'>"""
+        <style>
+            body{background-color:#f4f6f9;font-family:'Segoe UI',sans-serif;padding-bottom:80px;}
+            .stock-rojo{background-color:#FEE2E2!important;color:#991B1B;}
+            .stock-amarillo{background-color:#FEF3C7!important;color:#92400E;}
+            .stock-verde{background-color:#D1FAE5!important;color:#065F46;}
+            /* Sidebar PC */
+            .desktop-sidebar{position:sticky;top:0;height:100vh;overflow-y:auto;background:#fff;border-right:1px solid #e5e7eb;padding:25px 15px;box-shadow:2px 0 10px rgba(0,0,0,0.03);}
+            .btn-filtro{color:#081226;font-size:0.9rem;padding:9px 14px;font-weight:600;border-radius:30px;border:1px solid #dee2e6;text-align:left;width:100%;cursor:pointer;background:#fff;transition:0.2s;margin-bottom:5px;}
+            .btn-filtro.active{background-color:#081226;color:white;border-color:#081226;}
+            .btn-tarifa{color:#166534;font-size:0.9rem;padding:8px 12px;font-weight:600;border-radius:30px;border:1px solid #bbf7d0;text-align:left;width:100%;cursor:pointer;background:#f0fdf4;transition:0.2s;margin-bottom:5px;}
+            .btn-tarifa.active{background-color:#166534;color:white;border-color:#166534;}
+            /* Panel PDF Superior */
+            .pdf-panel{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:15px;display:flex;flex-wrap:wrap;gap:15px;align-items:center;justify-content:space-between;}
+            .pdf-panel-title{font-size:0.85rem;font-weight:800;color:#dc3545;margin:0;}
+            .check-group{display:flex;flex-wrap:wrap;gap:12px;align-items:center;}
+            /* Tarjeta Optimizada Movil */
+            .tarjeta-contenedor{contain: content;}
+            .producto-img{width:100%;height:150px;object-fit:contain;background:white;padding:8px;}
+            @media(min-width:768px){.producto-img{height:190px;}}
+            .card-producto{border-radius:14px;overflow:hidden;background:#fff;border:1px solid #e5e7eb;height:100%;transition:transform 0.15s;}
+            .price-box{background:#f9fafb;border-radius:8px;padding:5px;font-size:0.78rem;text-align:center;border:1px solid #e5e7eb;height:100%;display:flex;flex-direction:column;justify-content:center;}
+            .zona-seguridad{display:none;}
+            /* Navbar Móvil Fija */
+            .mobile-header{background:#fff;border-bottom:1px solid #e5e7eb;position:sticky;top:0;z-index:1020;padding:10px 15px;}
+            .btn-floating-menu{position:fixed;bottom:20px;right:20px;z-index:1030;background:#081226;color:#fff;border:none;padding:12px 24px;border-radius:30px;font-weight:bold;box-shadow:0 4px 15px rgba(0,0,0,0.2);}
+            @media print{#web-app{display:none!important;}#print-placeholder{display:block!important;width:100%;}.print-table{width:100%!important;border-collapse:collapse!important;margin-top:20px;}.print-table th{background-color:#081226!important;color:white!important;padding:8px;font-size:11px;text-align:center;}.print-table td{padding:6px;border:1px solid #ddd;font-size:11px;vertical-align:middle;}}
+        </style></head><body><div id="web-app">
+        
+        <div class="mobile-header d-lg-none shadow-sm">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <img src="##LOGO_HTML##" alt="Logo" style="height:55px;object-fit:contain;">
+                <button class="btn btn-sm btn-danger fw-bold rounded-pill px-3" onclick="toggleModoSeguridad()" id="btnToggleSeguridadMob">🔓 Seguridad</button>
+            </div>
+        </div>
+
+        <button class="btn-floating-menu d-lg-none shadow" data-bs-toggle="offcanvas" data-bs-target="#sidebarOffcanvas">📦 Categorías / Marcas</button>
+
+        <div class="offcanvas offcanvas-start" id="sidebarOffcanvas" style="width:280px;">
+            <div class="offcanvas-header border-bottom">
+                <h5 class="offcanvas-title fw-bold">Filtros de Catálogo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+            </div>
+            <div class="offcanvas-body bg-light" id="contenedorFiltrosMovil">
+                </div>
+        </div>
+
+        <div class='container-fluid'><div class='row'>
+        
+        <div class='col-lg-2 d-none d-lg-block desktop-sidebar' id="sidebarDesktop">
+            <div class='text-center mb-3'><img src='##LOGO_HTML##' alt='Logo' style='height:65px;max-width:100%;object-fit:contain;'><h5 class='fw-bold mt-2 text-dark' style="font-size:1.1rem;">Catálogo de Salón</h5></div>
+            <button id="btnToggleSeguridad" class="btn btn-outline-danger btn-sm w-100 fw-bold rounded-pill mb-3" onclick="toggleModoSeguridad()">🔓 Modo Clientes Seguridad</button>
+            <div id="seccionFiltrosMaster">
+                <h6 class='fw-bold mb-2 text-success px-1' style='font-size:0.8rem;'>1. TARIFA EN PANTALLA</h6>
+                <ul class='nav flex-column gap-1 mb-3'>
+                    <li class='nav-item'><button class='btn-tarifa active' data-tarifa='Todas'>👁️ Mostrar Todas</button></li>
+                    <li class='nav-item'><button class='btn-tarifa' data-tarifa='SALGS'>💲 Tarifa SALGS (Salón)</button></li>
+                    <li class='nav-item zona-seguridad'><button class='btn-tarifa' data-tarifa='MAYGS'>🛡️ Tarifa MAYGS</button></li>
+                    <li class='nav-item zona-seguridad'><button class='btn-tarifa' data-tarifa='DIST 1'>🛡️ Tarifa DIST 1</button></li>
+                    <li class='nav-item zona-seguridad'><button class='btn-tarifa' data-tarifa='DIST 2'>🛡️ Tarifa DIST 2</button></li>
+                    <li class='nav-item zona-seguridad'><button class='btn-tarifa' data-tarifa='CREGS'>🛡️ Tarifa CREGS</button></li>
+                    <li class='nav-item zona-seguridad'><button class='btn-tarifa' data-tarifa='CONGS'>🛡️ Tarifa CONGS</button></li>
+                </ul>
+                <hr>
+                <h6 class='fw-bold mb-2 text-dark px-1' style='font-size:0.8rem;'>2. FILTRAR CATEGORÍA</h6>
+                <ul class='nav flex-column gap-1' id="listaCategoriasM">"""
         
         html = html.replace('##LOGO_HTML##', logo_html)
         
@@ -223,98 +281,136 @@ def main():
             html += f"<li class='nav-item'><button class='btn-filtro {active_class}' data-filtro='{hoja}'>📦 {hoja} ({len(pandas_clone)})</button></li>"
             first_tab = False
 
-        html += """</ul></div><div class='col-12 col-lg-10 py-3'><div class='row g-2 mb-3'><div class='col-12 col-md-8'><input type='text' id='buscadorWeb' class='form-control form-control-lg border-2 shadow-sm rounded-pill px-4' placeholder='🔍 Buscar producto en el salón...'></div><div class='col-12 col-md-4'><select id='ordenarPor' class='form-select form-select-lg border-2 shadow-sm rounded-pill'><option value='default'>⇅ Ordenar por...</option><option value='az'>🔤 A - Z (Alfabético)</option><option value='za'>🔤 Z - A (Alfabético)</option><option value='stock_desc'>📦 Mayor Stock</option><option value='stock_asc'>📦 Menor Stock</option><option value='precio_asc'>💲 Menor Precio</option><option value='precio_desc'>💲 Mayor Precio</option></select></div></div><div class='pdf-panel shadow-sm mb-3'><div class='check-group'><span class='pdf-panel-title'>📄 COTIZACIÓN PDF:</span><div class='form-check form-check-inline m-0'><input class='form-check-input check-tarifa-pdf' type='checkbox' value='SALGS' id='chk_SALGS' checked><label class='form-check-label fw-bold text-dark' for='chk_SALGS'>SALGS</label></div>
-        <div class='form-check form-check-inline m-0 zona-seguridad'><input class='form-check-input check-tarifa-pdf' type='checkbox' value='MAYGS' id='chk_MAYGS'><label class='form-check-label fw-bold text-danger' for='chk_MAYGS'>MAYGS</label></div>
-        <div class='form-check form-check-inline m-0 zona-seguridad'><input class='form-check-input check-tarifa-pdf' type='checkbox' value='DIST 1' id='chk_DIST1'><label class='form-check-label fw-bold text-danger' for='chk_DIST1'>DIST 1</label></div>
-        <div class='form-check form-check-inline m-0 zona-seguridad'><input class='form-check-input check-tarifa-pdf' type='checkbox' value='DIST 2' id='chk_DIST2'><label class='form-check-label fw-bold text-danger' for='chk_DIST2'>DIST 2</label></div>
-        <div class='form-check form-check-inline m-0 border-start ps-2'><input class='form-check-input' type='checkbox' id='chkMostrarStock' checked><label class='form-check-label small text-muted fw-bold' for='chkMostrarStock'>📦 Stock</label></div></div><button id='btnGenerarPDF' onclick='descargarPDFNativo()' class='btn btn-danger btn-sm fw-bold px-4 py-2 rounded-pill shadow-sm'>DESCARGAR PDF</button></div><div class='row row-productos g-3' id='grilla-productos' style='padding:5px;'></div>"""
-
-        footer_html = """</div></div></div></div></div><div id='print-placeholder'></div>
+        html += """</ul></div></div>
+        
+        <div class='col-12 col-lg-10 py-3'>
+            <div class='row g-2 mb-3'>
+                <div class='col-12 col-md-8'><input type='text' id='buscadorWeb' class='form-control form-control-lg border-2 shadow-sm rounded-pill px-4' placeholder='🔍 Escribe código o nombre para buscar...'></div>
+                <div class='col-12 col-md-4'><select id='ordenarPor' class='form-select form-select-lg border-2 shadow-sm rounded-pill'><option value='default'>⇅ Ordenar por...</option><option value='az'>🔤 A - Z (Alfabético)</option><option value='za'>🔤 Z - A (Alfabético)</option><option value='stock_desc'>📦 Mayor Stock</option><option value='stock_asc'>📦 Menor Stock</option><option value='precio_asc'>💲 Menor Precio</option><option value='precio_desc'>💲 Mayor Precio</option></select></div>
+            </div>
+            
+            <div class='pdf-panel shadow-sm mb-3'>
+                <div class='check-group'>
+                    <span class='pdf-panel-title'>📄 COTIZACIÓN PDF:</span>
+                    <div class='form-check form-check-inline m-0'><input class='form-check-input check-tarifa-pdf' type='checkbox' value='SALGS' id='chk_SALGS' checked><label class='form-check-label fw-bold text-dark' for='chk_SALGS'>SALGS</label></div>
+                    <div class='form-check form-check-inline m-0 zona-seguridad'><input class='form-check-input check-tarifa-pdf' type='checkbox' value='MAYGS' id='chk_MAYGS'><label class='form-check-label fw-bold text-danger' for='chk_MAYGS'>MAYGS</label></div>
+                    <div class='form-check form-check-inline m-0 zona-seguridad'><input class='form-check-input check-tarifa-pdf' type='checkbox' value='DIST 1' id='chk_DIST1'><label class='form-check-label fw-bold text-danger' for='chk_DIST1'>DIST 1</label></div>
+                    <div class='form-check form-check-inline m-0 zona-seguridad'><input class='form-check-input check-tarifa-pdf' type='checkbox' value='DIST 2' id='chk_DIST2'><label class='form-check-label fw-bold text-danger' for='chk_DIST2'>DIST 2</label></div>
+                    <div class='form-check form-check-inline m-0 border-start ps-2'><input class='form-check-input' type='checkbox' id='chkMostrarStock' checked><label class='form-check-label small text-muted fw-bold' for='chkMostrarStock'>📦 Stock</label></div>
+                </div>
+                <button id='btnGenerarPDF' onclick='descargarPDFNativo()' class='btn btn-danger btn-sm fw-bold px-4 py-2 rounded-pill shadow-sm'>DESCARGAR PDF</button>
+            </div>
+            
+            <div class='row row-cols-2 row-cols-md-3 row-cols-lg-4 g-2 g-md-3' id='grilla-productos'></div>
+        </div>
+        
+        </div></div></div></div></div><div id='print-placeholder'></div>
         <script>
             let debounceTimer;
             const PRODUCTOS = ##JSON_DATA##;
+            const IMAGENES = ##JSON_IMAGES##; // Mapa binario desacoplado para velocidad absoluta
+            
             let stateCat = 'Todo'; let stateSearch = ''; let stateTarifa = 'Todas'; let stateSort = 'default';
             let modoSeguridadActivo = false;
             let productosFiltrados = []; let paginaActual = 0; const ITEMS_POR_PAGINA = 30;
 
+            // Clonamos los controles de filtros para que funcionen sincronizados en PC y en el Offcanvas móvil
+            document.getElementById('contenedorFiltrosMovil').innerHTML = document.getElementById('seccionFiltrosMaster').innerHTML;
+
             function toggleModoSeguridad() {
                 modoSeguridadActivo = !modoSeguridadActivo;
-                let elementos = document.querySelectorAll('.zona-seguridad');
-                elementos.forEach(el => {
+                document.querySelectorAll('.zona-seguridad').forEach(el => {
                     el.style.display = modoSeguridadActivo ? 'block' : 'none';
-                    if(el.tagName === 'DIV') el.style.display = modoSeguridadActivo ? 'inline-block' : 'none';
+                    if(el.tagName === 'DIV' || el.tagName === 'INPUT') el.style.display = modoSeguridadActivo ? 'inline-block' : 'none';
                 });
-                let btn = document.getElementById('btnToggleSeguridad');
-                btn.innerHTML = modoSeguridadActivo ? '🔒 Salir Modo Seguridad' : '🔓 Modo Clientes Seguridad';
-                btn.classList.toggle('btn-danger');
-                btn.classList.toggle('btn-success');
+                
+                document.getElementById('btnToggleSeguridad').innerHTML = modoSeguridadActivo ? '🔒 Salir Seguridad' : '🔓 Modo Clientes Seguridad';
+                document.getElementById('btnToggleSeguridad').className = modoSeguridadActivo ? 'btn btn-success btn-sm w-100 fw-bold rounded-pill mb-3' : 'btn btn-outline-danger btn-sm w-100 fw-bold rounded-pill mb-3';
+                document.getElementById('btnToggleSeguridadMob').innerHTML = modoSeguridadActivo ? '🔒 Salir' : '🔓 Seguridad';
+                document.getElementById('btnToggleSeguridadMob').className = modoSeguridadActivo ? 'btn btn-sm btn-success fw-bold rounded-pill px-3' : 'btn btn-sm btn-danger fw-bold rounded-pill px-3';
                 
                 if(!modoSeguridadActivo) {
                     stateTarifa = 'Todas';
                     document.querySelectorAll('.btn-tarifa').forEach(b => b.classList.remove('active'));
-                    document.querySelector('.btn-tarifa[data-tarifa="Todas"]').classList.add('active');
-                    document.querySelectorAll('.check-tarifa-pdf').forEach(cb => {
-                        if(cb.value !== 'SALGS') cb.checked = false;
-                    });
+                    document.querySelectorAll('.btn-tarifa[data-tarifa="Todas"]').forEach(b => b.classList.add('active'));
+                    document.querySelectorAll('.check-tarifa-pdf').forEach(cb => { if(cb.value !== 'SALGS') cb.checked = false; });
                 }
                 aplicarFiltros();
             }
 
             function aplicarFiltros() {
                 let q = stateSearch.toUpperCase().trim();
+                
+                // El filtrado es instantáneo porque los objetos ya no cargan los pesados Base64 internamente
                 productosFiltrados = PRODUCTOS.filter(p => {
                     let matchCat = (stateCat === 'Todo' || p.h === stateCat);
                     let matchSearch = (q === '' || p.n.toUpperCase().includes(q) || p.c.toUpperCase().includes(q));
                     let matchTarifa = stateTarifa === 'Todas' ? true : p.p[stateTarifa] !== undefined;
                     return matchCat && matchSearch && matchTarifa;
                 });
+                
                 if (stateSort==='az') productosFiltrados.sort((a,b)=>a.n.localeCompare(b.n));
                 else if (stateSort==='za') productosFiltrados.sort((a,b)=>b.n.localeCompare(a.n));
                 else if (stateSort==='stock_desc') productosFiltrados.sort((a,b)=>b.s - a.s);
                 else if (stateSort==='stock_asc') productosFiltrados.sort((a,b)=>a.s - b.s);
                 else if (stateSort==='precio_asc') productosFiltrados.sort((a,b)=>a.pr - b.pr);
                 else if (stateSort==='precio_desc') productosFiltrados.sort((a,b)=>b.pr - a.pr);
-                paginaActual = 0; document.getElementById('grilla-productos').innerHTML = ''; renderizarPagina();
+                
+                paginaActual = 0; 
+                document.getElementById('grilla-productos').innerHTML = ''; 
+                renderizarPagina();
             }
 
             document.getElementById('ordenarPor').addEventListener('change', function() { stateSort = this.value; aplicarFiltros(); });
 
             function renderizarPagina() {
-                let start = paginaActual * ITEMS_POR_PAGINA; let end = start + ITEMS_POR_PAGINA;
+                let start = paginaActual * ITEMS_POR_PAGINA; 
+                let end = start + ITEMS_POR_PAGINA;
                 let items = productosFiltrados.slice(start, end);
+                
                 if (items.length === 0 && paginaActual === 0) {
                     document.getElementById('grilla-productos').innerHTML = '<div class="col-12 text-center py-5"><h5 class="text-muted">No se encontraron productos</h5></div>'; return;
                 }
+                
                 let html = '';
                 items.forEach(p => {
-                    let imgTag = p.i ? `<img src="${p.i}" class="producto-img" loading="lazy">` : `<div class="producto-img d-flex align-items-center justify-content-center text-muted border-bottom"><small>Sin foto</small></div>`;
+                    // Extrae la imagen del mapa binario indexado solo cuando se va a dibujar en pantalla
+                    let b64 = IMAGENES[p.c];
+                    let imgTag = b64 ? `<img src="data:image/png;base64,${b64}" class="producto-img" loading="lazy">` : `<div class="producto-img d-flex align-items-center justify-content-center text-muted border-bottom"><small style="font-size:0.7rem;">Sin foto</small></div>`;
                     let stockClass = p.s <= 5 ? 'stock-rojo' : (p.s <= 20 ? 'stock-amarillo' : 'stock-verde');
+                    
                     let preciosHtml = '';
                     for (const [tarifa, precio] of Object.entries(p.p)) {
                         if(!modoSeguridadActivo && tarifa !== 'SALGS') continue;
-                        preciosHtml += `<div class='col-6 price-cell'><div class='price-box'><span class='text-muted d-block fw-bold' style='font-size:0.65rem;'>${tarifa}</span><strong class='text-success fw-bold' style='font-size:0.8rem;'>${precio}</strong></div></div>`;
+                        preciosHtml += `<div class='col-12 col-md-6 p-1'><div class='price-box'><span class='text-muted d-block fw-bold' style='font-size:0.6rem; line-height:1;'>${tarifa}</span><strong class='text-success fw-bold' style='font-size:0.75rem;'>${precio}</strong></div></div>`;
                     }
                     if(preciosHtml === '') {
-                        preciosHtml = `<div class='col-12'><div class='price-box text-muted small fw-semibold py-2'>Consulte precio</div></div>`;
+                        preciosHtml = `<div class='col-12'><div class='price-box text-muted small fw-semibold py-1'>Consulte</div></div>`;
                     }
-                    html += `<div class='col-12 col-sm-6 col-md-4 col-lg-4 col-xl-3 tarjeta-contenedor'>
+                    
+                    html += `<div class='col tarjeta-contenedor'>
                         <div class='card card-producto shadow-sm d-flex flex-column justify-content-between'>
-                            <div class='position-relative'>${imgTag}<span class='position-absolute top-0 start-0 m-2 badge bg-dark font-monospace fs-6'>${p.c}</span><span class='position-absolute top-0 end-0 m-2 badge ${stockClass} fw-bold fs-6'>Stock: ${p.s}</span></div>
-                            <div class='card-body d-flex flex-column justify-content-between p-3 bg-white'>
-                                <div class='mb-2'>
-                                    <h6 class='fw-bold text-dark text-uppercase mb-1' style='font-size:0.9rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;height:38px;'>${p.n}</h6>
-                                    <small class='text-muted fw-bold'>${p.m}</small>
+                            <div class='position-relative'>
+                                ${imgTag}
+                                <span class='position-absolute top-0 start-0 m-1 badge bg-dark font-monospace' style='font-size:0.7rem; padding:3px 6px;'>${p.c}</span>
+                                <span class='position-absolute bottom-0 end-0 m-1 badge ${stockClass} fw-bold' style='font-size:0.7rem; padding:3px 6px;'>St: ${p.s}</span>
+                            </div>
+                            <div class='card-body d-flex flex-column justify-content-between p-2 bg-white' style='flex-grow:1;'>
+                                <div class='mb-1'>
+                                    <h6 class='fw-bold text-dark text-uppercase mb-0' style='font-size:0.78rem; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; height:34px; line-height:1.1;'>${p.n}</h6>
+                                    <small class='text-muted d-block font-weight-bold' style='font-size:0.68rem; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;'>${p.m}</small>
                                 </div>
-                                <div class='row g-1 border-top pt-2'>${preciosHtml}</div>
+                                <div class='row g-0 pt-1 border-top'>${preciosHtml}</div>
                             </div>
                         </div>
                     </div>`;
                 });
-                document.getElementById('grilla-productos').insertAdjacentHTML('beforeend', html); paginaActual++;
+                document.getElementById('grilla-productos').insertAdjacentHTML('beforeend', html); 
+                paginaActual++;
             }
 
             window.addEventListener('scroll', () => {
-                if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 800) {
+                if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 900) {
                     if (paginaActual * ITEMS_POR_PAGINA < productosFiltrados.length) renderizarPagina();
                 }
             });
@@ -322,13 +418,44 @@ def main():
             document.getElementById('buscadorWeb').addEventListener('input', function() {
                 clearTimeout(debounceTimer); let query = this.value;
                 debounceTimer = setTimeout(() => {
-                    stateSearch = query; if (query !== '') { stateCat = 'Todo'; document.querySelectorAll('.btn-filtro').forEach(b => b.classList.remove('active')); document.querySelectorAll(`.btn-filtro[data-filtro="Todo"]`).forEach(b => b.add('active')); }
+                    stateSearch = query; 
+                    if (query !== '') { 
+                        stateCat = 'Todo'; 
+                        document.querySelectorAll('.btn-filtro').forEach(b => b.classList.remove('active')); 
+                        document.querySelectorAll(`.btn-filtro[data-filtro="Todo"]`).forEach(b => b.add('active')); 
+                    }
                     aplicarFiltros();
-                }, 300);
+                }, 250);
             });
 
-            document.querySelectorAll('.btn-filtro').forEach(btn => { btn.addEventListener('click', () => { let val = btn.getAttribute('data-filtro'); document.querySelectorAll('.btn-filtro').forEach(b => b.classList.remove('active')); document.querySelectorAll(`.btn-filtro[data-filtro="${val}"]`).forEach(b => b.add('active')); stateCat = val; aplicarFiltros(); }); });
-            document.querySelectorAll('.btn-tarifa').forEach(btn => { btn.addEventListener('click', () => { let val = btn.getAttribute('data-tarifa'); document.querySelectorAll('.btn-tarifa').forEach(b => b.classList.remove('active')); document.querySelectorAll(`.btn-tarifa[data-tarifa="${val}"]`).forEach(b => b.add('active')); stateTarifa = val; aplicarFiltros(); }); });
+            // Sincronización bidireccional de los botones en PC y el menú lateral móvil
+            document.addEventListener('click', function(e) {
+                let filtroBtn = e.target.closest('.btn-filtro');
+                if(filtroBtn) {
+                    let val = filtroBtn.getAttribute('data-filtro');
+                    document.querySelectorAll('.btn-filtro').forEach(b => b.classList.remove('active'));
+                    document.querySelectorAll(`.btn-filtro[data-filtro="${val}"]`).forEach(b => b.classList.add('active'));
+                    stateCat = val;
+                    let buscador = document.getElementById('buscadorWeb');
+                    if(buscador.value !== '') { buscador.value = ''; stateSearch = ''; }
+                    aplicarFiltros();
+                    
+                    // Cierra el panel deslizable en móviles al elegir categoría
+                    let canvasEl = document.getElementById('sidebarOffcanvas');
+                    let instance = bootstrap.Offcanvas.getInstance(canvasEl);
+                    if(instance) instance.hide();
+                    window.scrollTo({top:0});
+                }
+
+                let tarifaBtn = e.target.closest('.btn-tarifa');
+                if(tarifaBtn) {
+                    let val = tarifaBtn.getAttribute('data-tarifa');
+                    document.querySelectorAll('.btn-tarifa').forEach(b => b.classList.remove('active'));
+                    document.querySelectorAll(`.btn-tarifa[data-tarifa="${val}"]`).forEach(b => b.classList.add('active'));
+                    stateTarifa = val;
+                    aplicarFiltros();
+                }
+            });
 
             function descargarPDFNativo() {
                 let checkboxes = document.querySelectorAll('.check-tarifa-pdf:checked');
@@ -365,7 +492,8 @@ def main():
                             let row = ["", p.c, p.n + "\\nMarca: " + p.m];
                             if (mostrarStock) row.push(p.s.toString());
                             preciosFila.forEach(precio => row.push(precio));
-                            filas.push(row); imagenesFila.push(p.i);
+                            filas.push(row); 
+                            imagenesFila.push(IMAGENES[p.c] || "");
                         });
 
                         doc.autoTable({
@@ -373,10 +501,13 @@ def main():
                             styles: { fontSize: 8, valign: 'middle' },
                             headStyles: { fillColor: [8, 18, 38], textColor: 255 },
                             columnStyles: { 0: { cellWidth: 20, halign: 'center' }, 1: { cellWidth: 25 } },
+                            bodyStyles: { minCellHeight: 20 },
                             didDrawCell: function(data) {
                                 if (data.column.index === 0 && data.cell.section === 'body') {
-                                    let imgStr = imagenesFila[data.row.index];
-                                    if (imgStr) doc.addImage(imgStr, 'JPEG', data.cell.x + 2, data.cell.y + 2, 16, 16);
+                                    let b64Str = imagenesFila[data.row.index];
+                                    if (b64Str) {
+                                        try { doc.addImage("data:image/png;base64," + b64Str, 'PNG', data.cell.x + 2, data.cell.y + 2, 16, 16); } catch(e) {}
+                                    }
                                 }
                             }
                         });
@@ -388,7 +519,7 @@ def main():
                 }, 100);
             }
 
-            // Inicialización directa e instantánea sin esperas fallidas
+            // INICIO EN CALIENTE
             aplicarFiltros();
         </script></body></html>"""
 
@@ -398,7 +529,7 @@ def main():
         with open("index.html", "w", encoding="utf-8") as f:
             f.write(html)
             
-        print(f"¡Catálogo de Minoristas/Salón generado con éxito!")
+        print(f"¡Catálogo de Minoristas/Salón optimizado con éxito!")
 
     except Exception as e:
         print(f"Error general: {e}")
