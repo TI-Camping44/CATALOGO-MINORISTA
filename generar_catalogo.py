@@ -1,6 +1,8 @@
 import xmlrpc.client
 import os
 import json
+import sys
+import traceback
 
 # =====================================
 # CONFIGURACIÓN DIRECTA (CAMPING 44)
@@ -10,7 +12,6 @@ DB = "gcaceres93-camping-main-15845610"
 USER = "facundocolman@camping44.com.py"
 API_KEY = "55f70e57a3caa3113e3ffa559b5ba020931dc501"
 
-# LISTA MAESTRA DE SKUs EN LIQUIDACIÓN (PROVISTA POR EL DIRECTORIO)
 SKUS_LIQUIDACION = set(
     "110306 110307 110509 110562 110563 110567 110568 110569 110582 110583 110584 110585 110586 110587 110588 110589 110734 110738 110739 110751 110753 110756 110759 110760 111564 111566 112000 115702 115703 115704 140470 140704 140705 140706 140707 151500 151501 151502 151516 151523 151531 151537 151538 151539 151543 151544 151565 151570 151590 151595 151661 160082 170229 170356 190001 200137 200138 200139 200320 200378 250060 250061 250062 250690 250691 250692 250693 250694 260252 260275 260357 260360 260361 260362 260366 260368 260372 260375 260601 260715 260850 261300 261405 261406 262000 270050 270056 270057 270101 270103 270150 270151 270151U 270152 270157 270198 270200 270202 270203 270204 270204U 270250 270251 270500 270501 270550 270560 270565 270570 270575 270601 270602 270650 270660 270680 270689 270801 270808 270809 270812 270813 270816 270821 270822 270823 270830 270900 272022 272063 300090 300091 300092 300093 300094 300096 320016 320054 320061 320065 320079 320095 320130 320155 320156 320202 320207 320259 320280EGF 320400 320514 320515 320516 320517 320600 321055 321057 321058 321060 321061 321062 321070 321075 323110 323510 324000 324020 350200 350201 350202 350203 400212 400214 400216 400217 400221 400231 400247 400253 400290 400291 400386 440154 440158 440161 440162 510260 510261 510262 510749 550259 550400 610914 610927 610932 610935 610936 610937 610939 610941 610945 610946 610947 610948 610950 610966 610967 610968 610979 610980 611254 620122 620123 620182 620184 620189 620193 620202 620580 620581 620582 620583 620584 620585 620586 620587 620588 620589 620590 620591 620600 620601 620602 620603 620604 620605 620606 620607 620608 620609 620610 620611 620612 620613 620615 620616 620617 620618 620619 620620 620621 620622 620623 620624 620625 620626 620627 620628 620629 620630 620631 620632 620633 620634 620644 620646 620648 620649 620650 620651 620653 620655 620656 620657 620658 620659 620660 620661 620662 620663 620664 620665 620666 620667 620668 620670 620672 620673 620674 620676 620677 620679 620680 620681 620682 620683 620684 620685 620686 620687 620688 620689 620690 620691 620692 620693 620694 620695 620696 620697 620698 620699 621010 621011 621013 621022 621040 621041 621042 621043 621044 621046 621050 621054 621058 621062 621070 621071 621072 621073 621076 621080 621084 621100 621101 621102 621103 621104 621105 621106 621107 621108 621109 621110 621111 621112 621114 621115 621116 621117 621118 621119 621120 621121 621122 621123 621124 621125 621126 621127 621128 621129 621130 621131 621132 621150 621151 621152 621153 621154 621155 621156 621200 621201 621202 621203 621204 621205 621206 621207 621208 621209 621210 621214 621218 621222 630030 630031 630032 630033 630034 630035 630036 630037 630038 630039 630040 670113 680085 680466 680477 680532 680534 680537 680539 680552 680564 680571 680572 680592 680597 680598 680599 680675 680848 680850 681090 681100 681100EGF 681101 681102 681103 681104 681105 681105EGF 681106 681107 681108 681109 681110 681111 681112 681113 681115 681116 681120 681122 710418 711300 711305 711307 712115 712116 712117 712118 712120 730459 749000 751000 751002 751003 751004 751005 751007 751008 751009 751010 760060 770522 800170 800173 830240 830241 830242 830243 830246 830247 830249 830250 830251 830252 830253 830254 830255 830256 830257 830258 830259 830260 830261 830262 830263 830264 830265 830266 830267 830268 830269 830270 830273 830276 830277 830278 830280 830281 830282 830283 830284 830285 830286 830287 830288 830290 830291 830293 830294 830295 830296 830313 830314 830318 830319 830322 830323 830324 830325 830327 830328 830329 830334 830335 830337 830340 830342 830345 830346 830350 830351 830352 830353 830354 830355 830356 830357 830358 900376 900379 900382 900383 900397 900398 900621 900806 900810 901001 901005 901010 901150 901152 901265 901273 901408 901410 901411 901412 901500 901600 901601 901610 901611 901620 901621 904000 904100 920120 920140 920141 920142 920143 920146 920147 920150 920184 920392 920394 920398 920414 920415 920420 921063 921140 940178 940179 990060 DES149010 DES150080 DES151202 DES151562 DES151563 DES151564 DES151611 DES151612 DES190001 DES191100 DES191110 DES320154 DES320202 DES320207 DES320259 DES320270 DES320275 DES320522 DES320850 DES321201 DES321202 DES321203 DES323500 DES325000 DES400258 DES440220 DES510130 DES611034 DES650225 DES680467 DES680470 DES680507 DES680509 DES680512 DES680513 DES680514 DES680516 DES680517 DES680518 DES680525 DES680529 DES680531 DES680532 DES680537 DES680539 DES680540 DES680549 DES680552 DES680554 DES680557 DES680561 DES681101 DES710031 DES710240 DES710422 DES750100 DES750185 DES750186 DES750190 DES750300 DES750301 DES750302 DES750305 DES750310 DES750315 DES750325 DES750330 DES750335 DES750340 DES750420 DES750422 DES750427 DES750428 DES750429 DES770700 DES880051 DES880052 DES880053 DES880054 DES880055 DES880070 DES880071 DES880072 DES880073 DES880074 DES880075 DES880091 DES880092 DES901152 DES901411 DES920155 DES920284 DES941058 DES941059 EGF320007 LIQ150970 LIQ150982 LIQ150983 LIQ150985 LIQ150995 LIQ150996 LIQ151190 LIQ170135 LIQ260048 LIQ260276 LIQ260560 LIQ320019 LIQ320069 LIQ320156 LIQ320202 LIQ320260 LIQ320264 LIQ320445 LIQ320450 LIQ320511 LIQ320800 LIQ320850 LIQ321000 LIQ322500 LIQ324100 LIQ610902 LIQ610962 LIQ610964 LIQ680465 LIQ680554 LIQ680555 LIQ680558 LIQ680595 LIQ680597 LIQ680598 LIQ680599 LIQ680670 LIQ710031 LIQ750301 LIQ750330 LIQ750428 LIQ750429 LIQ770301 LIQ800160 LIQ800170 LIQ800173 LIQ800175 LIQ800186 LIQ800190 LIQ920110 LIQREP611063 LIQREP900770 LIQREP900772 LIQREP900773 REP900300 REP900301 REP900302 REP900767 REP900768 REP900769 REP900775 REP900776 REP900777 REP900778 REP900779 REP900780 REP900781 REP900782 REP900783 REP900784 REP900785 REP900786 REP900787 REP900788 REP900789 REP900791 REP900792 REP900793 REP900795 REP900798 REP900803 REP900853 REP900866 REP900867 REP900868 REP900869 REP901100 REP901120 REP901130 REP901140".split()
 )
@@ -22,7 +23,6 @@ def main():
         models = xmlrpc.client.ServerProxy(f'{URL}/xmlrpc/2/object')
 
         print("Conectado a Odoo exitosamente. Extrayendo datos de la empresa...")
-
         comp_data = models.execute_kw(DB, uid, API_KEY, 'res.company', 'search_read', [[['id', '=', 1]]], {'fields': ['logo_web']})
         logo_base64 = ""
         if comp_data and comp_data[0].get('logo_web'):
@@ -63,10 +63,28 @@ def main():
                 if tmpl_id not in mapa_precios: mapa_precios[tmpl_id] = {}
                 mapa_precios[tmpl_id][pl_id] = item.get('fixed_price', 0.0)
 
-        print("Extrayendo productos de Odoo...")
+        # PASO VITAL: Extraemos los productos SIN imágenes primero para que Odoo no corte el teléfono
+        print("Extrayendo productos base de Odoo (sin imágenes para no saturar)...")
         filtros = [['sale_ok', '=', True], ['active', '=', True], ['company_id', '=', 1]]
-        campos = ['id', 'name', 'default_code', 'qty_available', 'categ_id', 'product_brand_id', 'product_tmpl_id', 'image_128']
+        campos = ['id', 'name', 'default_code', 'qty_available', 'categ_id', 'product_brand_id', 'product_tmpl_id']
         products = models.execute_kw(DB, uid, API_KEY, 'product.product', 'search_read', [filtros], {'fields': campos, 'limit': 50000})
+
+        # PASO SEGURO: Descargamos las imágenes en paquetitos de 300
+        print(f"Se encontraron {len(products)} productos. Extrayendo imágenes en lotes pequeños...")
+        product_ids = [p['id'] for p in products]
+        imagenes_dict = {}
+        chunk_size = 300 
+        
+        for i in range(0, len(product_ids), chunk_size):
+            chunk_ids = product_ids[i:i+chunk_size]
+            try:
+                img_data = models.execute_kw(DB, uid, API_KEY, 'product.product', 'search_read', [[['id', 'in', chunk_ids]]], {'fields': ['id', 'image_128']})
+                for img in img_data:
+                    if img.get('image_128'):
+                        val = img['image_128']
+                        imagenes_dict[img['id']] = val.decode('utf-8') if isinstance(val, bytes) else val
+            except Exception as e_chunk:
+                print(f"Aviso: Fallo al extraer el lote de imágenes {i}, omitiendo. Detalle: {e_chunk}")
 
         print("Descontando productos perdidos (Ubicación NSE)...")
         nse_locs = models.execute_kw(DB, uid, API_KEY, 'stock.location', 'search', [[['complete_name', 'ilike', 'NSE']]])
@@ -185,10 +203,8 @@ def main():
                 "p": {}
             }
             
-            img_data = p.get('image_128')
-            if img_data:
-                if hasattr(img_data, 'data'): img_data = img_data.data
-                img_base64 = img_data.decode("utf-8") if isinstance(img_data, bytes) else img_data
+            img_base64 = imagenes_dict.get(p['id'])
+            if img_base64:
                 imagenes_js[cod_limpio] = img_base64
                 
             for idx, precio in enumerate(p['lista_precios_vals']):
@@ -320,14 +336,13 @@ def main():
 
             document.getElementById('contenedorFiltrosMovil').innerHTML = document.getElementById('seccionFiltrosMaster').innerHTML;
 
-            // FUNCIÓN MAESTRA PARA CALCULAR LA REBAJA DEL 30% EXACTA EN CLIENTE
             function formatLiquidation(precioStr) {
                 if (!precioStr || precioStr === '-') return '-';
                 if (precioStr.includes('US$')) {
                     let num = parseFloat(precioStr.replace('US$', '').replace(/,/g, '').trim());
                     return `US$ ${(num * 0.7).toFixed(2)}`;
                 } else {
-                    let num = parseInt(precioStr.replace('Gs.', '').replace(/\./g, '').trim());
+                    let num = parseInt(precioStr.replace('Gs.', '').replace(/\\./g, '').trim());
                     return Math.round(num * 0.7).toLocaleString('de-DE') + ' Gs.';
                 }
             }
@@ -392,7 +407,6 @@ def main():
                     let imgTag = b64 ? `<img src="data:image/png;base64,${b64}" class="producto-img" loading="lazy">` : `<div class="producto-img d-flex align-items-center justify-content-center text-muted border-bottom"><small style="font-size:0.7rem;">Sin foto</small></div>`;
                     let stockClass = p.s <= 5 ? 'stock-rojo' : (p.s <= 20 ? 'stock-amarillo' : 'stock-verde');
                     
-                    // CARTEL REMARCADO 30% OFF EN LA IMAGEN
                     let badgeLiq = p.h === '🔥 LIQUIDACIÓN' ? `<span class='position-absolute top-0 end-0 m-2 badge bg-danger text-white fw-bold shadow' style='font-size:0.8rem; padding:5px 9px; border-radius:8px; z-index:11; letter-spacing:0.5px;'>💥 30% OFF</span>` : '';
                     
                     let preciosHtml = '';
@@ -400,10 +414,8 @@ def main():
                         if(!modoSeguridadActivo && tarifa !== 'SALGS') continue;
                         
                         if (p.h === '🔥 LIQUIDACIÓN') {
-                            // Muestra el Antes (Tachado) y el Ahora en Rojo Liquidación
                             preciosHtml += `<div class='col-12 p-1'><div class='price-box border-danger' style='background-color:#FFF5F5;'><span class='text-muted d-block fw-bold' style='font-size:0.6rem; line-height:1;'>${tarifa}</span><span class='text-muted text-decoration-line-through d-block small' style='font-size:0.65rem;'>Antes: ${precio}</span><strong class='text-danger fw-black' style='font-size:0.85rem;'>🔥 Oferta: ${formatLiquidation(precio)}</strong></div></div>`;
                         } else {
-                            // Tarjeta Normal
                             preciosHtml += `<div class='col-12 col-md-6 p-1'><div class='price-box'><span class='text-muted d-block fw-bold' style='font-size:0.6rem; line-height:1;'>${tarifa}</span><strong class='text-success fw-bold' style='font-size:0.75rem;'>${precio}</strong></div></div>`;
                         }
                     }
@@ -532,6 +544,28 @@ def main():
                             urlsImagenes.push(p.c || "");
                         });
 
+                        const fetchImageAsBase64 = (url) => {
+                            return new Promise((resolve) => {
+                                if(!url) return resolve(null);
+                                const img = new Image();
+                                img.crossOrigin = 'Anonymous';
+                                img.onload = function() {
+                                    try {
+                                        const canvas = document.createElement('canvas');
+                                        canvas.width = this.width;
+                                        canvas.height = this.height;
+                                        const ctx = canvas.getContext('2d');
+                                        ctx.drawImage(this, 0, 0);
+                                        resolve(canvas.toDataURL('image/jpeg'));
+                                    } catch(e) { resolve(null); }
+                                };
+                                img.onerror = () => resolve(null);
+                                img.src = url;
+                            });
+                        };
+
+                        let base64Imagenes = await Promise.all(urlsImagenes.map(url => fetchImageAsBase64(url)));
+
                         doc.autoTable({
                             head: [columnas], body: filas, startY: 35, rowPageBreak: 'avoid',
                             styles: { fontSize: 8, valign: 'middle' },
@@ -565,10 +599,10 @@ def main():
         with open("index.html", "w", encoding="utf-8") as f:
             f.write(html)
             
-        print(f"¡Catálogo de Minoristas/Salón con Liquidación y precios 30% OFF generado con éxito!")
-
     except Exception as e:
-        print(f"Error general: {e}")
+        print(f"ERROR FATAL: {e}")
+        traceback.print_exc()
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
