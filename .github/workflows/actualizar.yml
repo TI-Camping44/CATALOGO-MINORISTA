@@ -23,10 +23,11 @@ jobs:
       - name: Ejecutar Script de Odoo
         run: python generar_catalogo.py
 
-      - name: Guardar index.html en el repositorio
+      - name: Crear ruta limpia y subir (Bypass de error)
         run: |
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
           git add index.html
-          git diff --quiet && git diff --staged --quiet || git commit -m "Actualización automática de Liquidación y Precios"
-          git push origin main
+          git commit -m "Catalogo actualizado" || echo "Nada que actualizar"
+          git branch -M web-publica
+          git push -f origin web-publica
