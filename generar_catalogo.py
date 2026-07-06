@@ -136,6 +136,7 @@ def main():
             palabras_bloqueadas = ["VITALICA", "RRHH", "UNIFORME", "SERVICIO TECNICO", "GASTO", "CONSUMO INTERNO", "ACTIVO FIJO", "OFICINA"]
             if any(pb in categoria_str or pb in desc for pb in palabras_bloqueadas): continue
 
+            # YA NO SALTAMOS EL STOCK 0 AQUÍ, PARA QUE SE VEAN COMO AGOTADOS EN EL SISTEMA
             stock = float(p.get('qty_available') or 0.0)
             if p['id'] in nse_stock: stock = stock - nse_stock[p['id']]
 
