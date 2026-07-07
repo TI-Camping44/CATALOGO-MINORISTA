@@ -31,6 +31,7 @@ def main():
             if isinstance(logo_base64, bytes):
                 logo_base64 = logo_base64.decode('utf-8')
 
+        print("Extrayendo listas permitidas con el CÓDIGO ORIGINAL...")
         pl_data = models.execute_kw(DB, uid, API_KEY, 'product.pricelist', 'search_read',
             [[['company_id', '=', 1]]], {'fields': ['id', 'name'], 'limit': 500})
         
