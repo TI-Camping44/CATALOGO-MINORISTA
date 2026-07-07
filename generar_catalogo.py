@@ -126,11 +126,11 @@ def main():
 
         print("Filtrando catálogo minorista...")
         for p in products:
-            ref = (p.get('default_code') or "").upper().strip()
+            ref = str(p.get('default_code') or "").upper().strip()
             if ref.startswith("AVE") or ref.startswith("NSE") or ref.startswith("INT"): continue
 
             categoria_str = p['categ_id'][1].upper() if p.get('categ_id') else ""
-            desc = (p.get('name') or "").upper()
+            desc = str(p.get('name') or "").upper()
             
             palabras_bloqueadas = ["VITALICA", "RRHH", "UNIFORME", "SERVICIO TECNICO", "GASTO", "CONSUMO INTERNO", "ACTIVO FIJO", "OFICINA"]
             if any(pb in categoria_str or pb in desc for pb in palabras_bloqueadas): continue
@@ -205,10 +205,13 @@ def main():
                     base_price = float(val)
                     break
 
-            cod_limpio = p.get('default_code', '-').strip()
+            # EL ESCUDO ESTÁ ACÁ
+            cod_limpio = str(p.get('default_code') or '-').strip()
+            nombre_limpio = str(p.get('name') or '')
+            
             prod_dict = {
                 "c": cod_limpio,
-                "n": p.get('name', ''),
+                "n": nombre_limpio,
                 "m": p['marca_limpia'],
                 "s": int(p['stock_calculado']),
                 "h": p['hoja_asignada'],
