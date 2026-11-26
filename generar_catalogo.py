@@ -3,6 +3,7 @@ import os
 import json
 import sys
 import traceback
+from datetime import datetime, timezone
 
 # =====================================
 # CONFIGURACIÓN DIRECTA (CAMPING 44)
@@ -119,13 +120,33 @@ def main():
         pl_ids_to_fetch = list(pl_name_mapping.keys())
         pl_items = models.execute_kw(DB, uid, API_KEY, 'product.pricelist.item', 'search_read',
             [[['pricelist_id', 'in', pl_ids_to_fetch]]],
-            {'fields': ['pricelist_id', 'product_tmpl_id', 'product_id', 'fixed_price'], 'limit': 300000})
+            {'fields': ['pricelist_id', 'product_tmpl_id', 'product_id', 'fixed_price', 'date_start', 'date_end'], 'limit': 300000})
 
         if not isinstance(pl_items, list):
             pl_items = []
 
+        # =====================================================================
+        # REGLAS CON FECHA (promos como Black Friday)
+        # Una regla con fecha de inicio/fin solo vale mientras está vigente.
+        # Antes se leían todas sin mirar la fecha: el precio de una promo que
+        # todavía no había empezado se mostraba como precio normal, y a los
+        # productos PROMO el catálogo le sumaba otro 30% encima (doble descuento).
+        # Ahora:
+        #   - las reglas sin fecha son el precio normal;
+        #   - las reglas con fecha vigente son el precio promocional;
+        #   - las reglas con fecha que no empezaron o ya terminaron se ignoran.
+        # Odoo guarda las fechas en UTC, igual que este "ahora".
+        # =====================================================================
+        ahora_utc = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+
         mapa_precios_tmpl = {}
         mapa_precios_prod = {}
+        mapa_promo_tmpl = {}
+        mapa_promo_prod = {}
+
+        def _guardar(mapa, clave, tarifa, precio):
+            if clave not in mapa: mapa[clave] = {}
+            mapa[clave][tarifa] = max(precio, mapa[clave].get(tarifa, 0.0))
 
         for item in pl_items:
             pl_id = item['pricelist_id'][0] if item.get('pricelist_id') else None
@@ -135,17 +156,26 @@ def main():
             precio = float(item.get('fixed_price') or 0.0)
             if precio <= 0: continue
 
+            fecha_ini = item.get('date_start') or ''
+            fecha_fin = item.get('date_end') or ''
+            con_fecha = bool(fecha_ini or fecha_fin)
+            if fecha_ini and fecha_ini > ahora_utc: continue   # promo que todavía no empezó
+            if fecha_fin and fecha_fin < ahora_utc: continue   # promo que ya terminó
+
+            # Misma lógica de siempre (variante y plantilla), pero las reglas con
+            # fecha vigente van a sus propios mapas de promo.
+            destino_tmpl = mapa_promo_tmpl if con_fecha else mapa_precios_tmpl
+            destino_prod = mapa_promo_prod if con_fecha else mapa_precios_prod
+
             tmpl_id = item.get('product_tmpl_id')
             if tmpl_id:
                 t_id = tmpl_id[0] if isinstance(tmpl_id, list) else tmpl_id
-                if t_id not in mapa_precios_tmpl: mapa_precios_tmpl[t_id] = {}
-                mapa_precios_tmpl[t_id][nombre_tarifa] = max(precio, mapa_precios_tmpl[t_id].get(nombre_tarifa, 0.0))
+                _guardar(destino_tmpl, t_id, nombre_tarifa, precio)
 
             prod_id = item.get('product_id')
             if prod_id:
                 p_id = prod_id[0] if isinstance(prod_id, list) else prod_id
-                if p_id not in mapa_precios_prod: mapa_precios_prod[p_id] = {}
-                mapa_precios_prod[p_id][nombre_tarifa] = max(precio, mapa_precios_prod[p_id].get(nombre_tarifa, 0.0))
+                _guardar(destino_prod, p_id, nombre_tarifa, precio)
 
         print("Extrayendo productos base de Odoo...")
         filtros = [['sale_ok', '=', True], ['active', '=', True], ['company_id', '=', 1]]
@@ -262,12 +292,26 @@ def main():
             # ETIQUETA PARA JS
             p['es_promo'] = True if es_promo else False
 
+            def _precio(mapa_prod, mapa_tmpl, tarifa):
+                val = mapa_prod.get(prod_id, {}).get(tarifa)
+                if not val or val <= 0:
+                    val = mapa_tmpl.get(tmpl_id, {}).get(tarifa, 0.0)
+                return float(val or 0.0)
+
             p_precios = []
+            p['oferta_vigente'] = None
             for tarifa in orden_precios:
-                p_val = mapa_precios_prod.get(prod_id, {}).get(tarifa)
-                if not p_val or p_val <= 0:
-                    p_val = mapa_precios_tmpl.get(tmpl_id, {}).get(tarifa, 0.0)
-                p_precios.append(float(p_val or 0.0))
+                normal = _precio(mapa_precios_prod, mapa_precios_tmpl, tarifa)
+                promo = _precio(mapa_promo_prod, mapa_promo_tmpl, tarifa)
+                if promo > 0 and tarifa == "SALGS" and normal > promo:
+                    # Promo vigente en SALGS: se muestra el normal tachado y la
+                    # promo como oferta, sin sumar el 30% de PROMO encima.
+                    p['oferta_vigente'] = promo
+                    p_precios.append(normal)
+                elif promo > 0:
+                    p_precios.append(promo)
+                else:
+                    p_precios.append(normal)
 
             p['lista_precios_vals'] = p_precios
 
@@ -308,6 +352,13 @@ def main():
                 precio_val = float(precio or 0.0)
                 if precio_val > 0:
                     prod_dict["p"][pl_name] = f"{int(round(precio_val)):,}".replace(",", ".") + " Gs."
+
+            # Promo con fecha vigente en SALGS (ej. Black Friday): precio y % de descuento
+            oferta = p.get('oferta_vigente')
+            normal_salgs = p['lista_precios_vals'][orden_precios.index("SALGS")]
+            if oferta and normal_salgs > 0:
+                prod_dict["o"] = f"{int(round(oferta)):,}".replace(",", ".") + " Gs."
+                prod_dict["d"] = int(round((1 - oferta / normal_salgs) * 100))
 
             productos_js.append(prod_dict)
 
@@ -441,7 +492,13 @@ def main():
 
             document.getElementById('contenedorFiltrosMovil').innerHTML = document.getElementById('seccionFiltrosMaster').innerHTML;
 
-            function formatPromo(sku, precioOriginal) {
+            // Producto con promo de Odoo vigente en SALGS (p.o): se usa ese precio tal cual.
+            function tieneOferta(p, tarifa) { return p.l === true || (!!p.o && tarifa === 'SALGS'); }
+            function textoDescuento(p, tarifa) { return (p.o && tarifa === 'SALGS') ? p.d : 30; }
+
+            function formatPromo(sku, precioOriginal, p, tarifa) {
+                if (p && p.o && tarifa === 'SALGS') return p.o;
+                if (p && p.l !== true) return precioOriginal;
                 if (OFERTAS_EXACTAS[sku] && OFERTAS_EXACTAS[sku] !== "-") {
                     return OFERTAS_EXACTAS[sku] + ' Gs.';
                 }
@@ -543,7 +600,7 @@ def main():
                     let imgTag = b64 ? `<img src="data:image/png;base64,${b64}" class="producto-img" loading="lazy">` : `<div class="producto-img d-flex align-items-center justify-content-center text-muted border-bottom"><small style="font-size:0.7rem;">Sin foto</small></div>`;
                     let stockClass = p.s <= 0 ? 'bg-danger text-white' : (p.s <= 5 ? 'stock-rojo' : (p.s <= 20 ? 'stock-amarillo' : 'stock-verde'));
                     let stockText = p.s <= 0 ? 'AGOTADO' : `Stock: ${p.s}`;
-                    let badgeLiq = p.l === true ? `<span class='position-absolute top-0 end-0 m-2 badge bg-danger text-white fw-bold shadow' style='font-size:0.8rem; padding:5px 9px; border-radius:8px; z-index:11; letter-spacing:0.5px;'>💥 30% OFF</span>` : '';
+                    let badgeLiq = (p.l === true || p.o) ? `<span class='position-absolute top-0 end-0 m-2 badge bg-danger text-white fw-bold shadow' style='font-size:0.8rem; padding:5px 9px; border-radius:8px; z-index:11; letter-spacing:0.5px;'>💥 ${p.o ? p.d : 30}% OFF</span>` : '';
                     
                     if (p.l === true && !p.p['SALGS'] && OFERTAS_EXACTAS[p.c]) {
                         p.p['SALGS'] = '-';
@@ -553,8 +610,8 @@ def main():
                     for (const [tarifa, precio] of Object.entries(p.p)) {
                         if(!modoSeguridadActivo && tarifa !== 'SALGS') continue;
                         
-                        if (p.l === true) {
-                            let precioOferta = formatPromo(p.c, precio);
+                        if (tieneOferta(p, tarifa)) {
+                            let precioOferta = formatPromo(p.c, precio, p, tarifa);
                             if (precioOferta === precio || precio === '-' || precio === 'Consulte') {
                                 preciosHtml += `<div class='col-12 p-1'><div class='price-box border-danger' style='background-color:#FFF5F5;'><span class='text-muted d-block fw-bold' style='font-size:0.6rem; line-height:1;'>${tarifa}</span><strong class='text-danger fw-black' style='font-size:0.85rem;'>🔥 Oferta: ${precioOferta}</strong></div></div>`;
                             } else {
@@ -680,9 +737,9 @@ def main():
 
                             tarifasSeleccionadas.forEach(t => { 
                                 if (p.p[t]) { 
-                                    if (p.l === true) {
-                                        let po = formatPromo(p.c, p.p[t]);
-                                        preciosFila.push(po + " (30% OFF)"); 
+                                    if (tieneOferta(p, t)) {
+                                        let po = formatPromo(p.c, p.p[t], p, t);
+                                        preciosFila.push(po + " (" + textoDescuento(p, t) + "% OFF)"); 
                                     } else {
                                         preciosFila.push(p.p[t]); 
                                     }
@@ -694,7 +751,7 @@ def main():
                             
                             if (!tienePrecio) return;
                             
-                            let nombreFinal = p.l === true ? "[PROMO] " + p.n : p.n;
+                            let nombreFinal = (p.l === true || p.o) ? "[PROMO] " + p.n : p.n;
                             let row = ["", p.c, nombreFinal + "\\nMarca: " + p.m];
                             
                             if (mostrarStock) row.push(p.s <= 0 ? 'AGOTADO' : p.s.toString());
