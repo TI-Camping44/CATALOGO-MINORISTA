@@ -382,6 +382,8 @@ def main():
             .desktop-sidebar{position:sticky;top:0;height:100vh;overflow-y:auto;background:#fff;border-right:1px solid #e5e7eb;padding:25px 15px;box-shadow:2px 0 10px rgba(0,0,0,0.03);}
             .btn-filtro{color:#081226;font-size:0.9rem;padding:9px 14px;font-weight:600;border-radius:30px;border:1px solid #dee2e6;text-align:left;width:100%;cursor:pointer;background:#fff;transition:0.2s;margin-bottom:4px;}
             .btn-filtro.active{background-color:#081226;color:white;border-color:#081226;}
+            .btn-filtro[data-filtro="🖤 BLACK FRIDAY"] { color: #000; border-color: #000; background-color: #fff; font-weight: 700; }
+            .btn-filtro[data-filtro="🖤 BLACK FRIDAY"].active { background-color: #000; color: #fff; border-color: #000; }
             .btn-filtro[data-filtro="🔥 PROMO"] { color: #dc3545; border-color: #f8d7da; background-color: #fff5f5; }
             .btn-filtro[data-filtro="🔥 PROMO"].active { background-color: #dc3545; color: white; border-color: #dc3545; }
             
@@ -441,12 +443,16 @@ def main():
         
         # Generar los botones dinámicos (contando los PROMO al vuelo)
         total_promo = sum(1 for p in productos_js if p["l"] == True)
+        # Sector Black Friday: productos con precio promocional de Odoo vigente (campo "o").
+        # Fuera de la fecha de la promo queda vacío (0).
+        total_black_friday = sum(1 for p in productos_js if p.get("o"))
         
         html += f"<li class='nav-item'><button class='btn-filtro active' data-filtro='Todo'>📦 Todo ({len(productos_js)})</button></li>"
+        html += f"<li class='nav-item'><button class='btn-filtro' data-filtro='🖤 BLACK FRIDAY'>🖤 BLACK FRIDAY ({total_black_friday})</button></li>"
         html += f"<li class='nav-item'><button class='btn-filtro' data-filtro='🔥 PROMO'>🔥 PROMO ({total_promo})</button></li>"
 
         for hoja in orden_hojas:
-            if hoja in ["Todo", "🔥 PROMO"]: continue
+            if hoja in ["Todo", "🔥 PROMO", "🖤 BLACK FRIDAY"]: continue
             pandas_clone = categorias_datos[hoja]
             if not pandas_clone: continue
             html += f"<li class='nav-item'><button class='btn-filtro' data-filtro='{hoja}'>📦 {hoja} ({len(pandas_clone)})</button></li>"
@@ -563,6 +569,7 @@ def main():
                     let matchCat = false;
                     if (stateCat === 'Todo') matchCat = true;
                     else if (stateCat === '🔥 PROMO') matchCat = p.l === true;
+                    else if (stateCat === '🖤 BLACK FRIDAY') matchCat = !!p.o;
                     else matchCat = (p.h === stateCat);
 
                     let matchSearch = (q === '' || p.n.toUpperCase().includes(q) || p.c.toUpperCase().includes(q));
@@ -591,7 +598,8 @@ def main():
                 let items = productosFiltrados.slice(start, end);
                 
                 if (items.length === 0 && paginaActual === 0) {
-                    document.getElementById('grilla-productos').innerHTML = '<div class="col-12 text-center py-5"><h5 class="text-muted">No se encontraron productos</h5></div>'; return;
+                    let msgVacio = (stateCat === '🖤 BLACK FRIDAY' && !stateSearch) ? 'Black Friday: del viernes 27/11 al lunes 30/11. Los productos aparecen acá cuando empieza la promo.' : 'No se encontraron productos';
+                    document.getElementById('grilla-productos').innerHTML = '<div class="col-12 text-center py-5"><h5 class="text-muted">' + msgVacio + '</h5></div>'; return;
                 }
                 
                 let html = '';
